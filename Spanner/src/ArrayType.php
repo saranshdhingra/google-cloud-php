@@ -62,19 +62,9 @@ namespace Google\Cloud\Spanner;
 class ArrayType
 {
     /**
-     * @var string|null
-     */
-    private $customType;
-
-    /**
      * @var int|null
      */
     private $type;
-
-    /**
-     * @var int|null
-     */
-    private $typeAnnotation;
 
     /**
      * @var StructType|null
@@ -99,8 +89,6 @@ class ArrayType
      */
     public function __construct($type)
     {
-        $typeAnnotation = null;
-        
         if ($type === Database::TYPE_STRUCT) {
             throw new \InvalidArgumentException(
                 '`Database::TYPE_STRUCT` is not a valid array type. ' .
@@ -127,16 +115,7 @@ class ArrayType
             );
         }
 
-        // handle custom data types(w/ typeAnnotation)
-        if (ValueMapper::isCustomType($type)) {
-            $this->customType = $type;
-            $temp = ValueMapper::getCustomTypeObj($type, null);
-            $type = $temp->type();
-            $typeAnnotation = $temp->typeAnnotation();
-        }
-
         $this->type = $type;
-        $this->typeAnnotation = $typeAnnotation;
         $this->structType = $structType;
     }
 
@@ -144,33 +123,11 @@ class ArrayType
      * Get the array value type.
      *
      * @access private
-     * @return int|null
+     * @return int|string|null
      */
     public function type()
     {
         return $this->type;
-    }
-
-    /**
-     * Get the type annotation code
-     *
-     * @access private
-     * @return int|null;
-     */
-    public function typeAnnotation()
-    {
-        return $this->typeAnnotation;
-    }
-
-    /**
-     * Get the custom type
-     *
-     * @access private
-     * @return string|null
-     */
-    public function customType()
-    {
-        return $this->customType;
     }
     
     /**
