@@ -17,17 +17,21 @@
 
 namespace Google\Cloud\PubSub;
 
-use Google\Cloud\Core\ArrayTrait;
-use Google\Cloud\Core\Batch\BatchRunner;
-use Google\Cloud\Core\Batch\ClosureSerializerInterface;
-use Google\Cloud\Core\Exception\NotFoundException;
-use Google\Cloud\Core\Iam\Iam;
-use Google\Cloud\Core\Iterator\ItemIterator;
-use Google\Cloud\Core\Iterator\PageIterator;
-use Google\Cloud\PubSub\Connection\ConnectionInterface;
-use Google\Cloud\PubSub\Connection\IamTopic;
+use Google\ApiCore\Traits\ArrayTrait;
+use Google\ApiCore\Exception\NotFoundException;
+use Google\Cloud\Core\V2\Iam;
+use Google\ApiCore\Veneer\Iterator\ItemIterator;
+use Google\ApiCore\Veneer\Iterator\PageIterator;
 use Google\Cloud\PubSub\V1\Encoding;
 use InvalidArgumentException;
+use Google\ApiCore\Traits\RequestCallerTrait;
+use Google\ApiCore\Serializer;
+use Google\ApiCore\Veneer\RequestHandler;
+use Google\Cloud\PubSub\V1\PublisherClient;
+use Google\Cloud\PubSub\V1\SchemaSettings;
+use Google\Protobuf\FieldMask;
+use Google\Cloud\PubSub\V1\Topic as TopicProto;
+use Google\Cloud\PubSub\V1\PubsubMessage;
 
 /**
  * A named resource to which messages are sent by publishers.
@@ -49,11 +53,23 @@ class Topic
 {
     use ArrayTrait;
     use ResourceNameTrait;
+    use RequestCallerTrait;
 
     /**
-     * @var ConnectionInterface A connection to the Google Cloud Platform API
+     * The request handler that is responsible for sending a req and
+     * serializing responses into relevant classes.
      */
-    protected $connection;
+    private $requestHandler;
+
+    /**
+     * The GAPIC class to call under the hood.
+     */
+    private $gapic;
+
+    /**
+     * @var Google\ApiCore\Serializer The serializer to be used for PubSub
+     */
+    private $serializer;
 
     /**
      * @var string The project ID
@@ -88,8 +104,6 @@ class Topic
     /**
      * Create a PubSub topic.
      *
-     * @param ConnectionInterface $connection A connection to the Google Cloud
-     *        Platform service
      * @param string $projectId The project Id
      * @param string $name The topic name
      * @param bool $encode Whether messages should be base64 encoded.
@@ -112,14 +126,18 @@ class Topic
      *        associated with this instance.
      */
     public function __construct(
-        ConnectionInterface $connection,
         $projectId,
         $name,
         $encode,
         array $info = [],
         array $clientConfig = []
     ) {
-        $this->connection = $connection;
+        $this->gapic = new PublisherClient($clientConfig);
+        $this->serializer = new PubSubSerializer();
+        $this->requestHandler = new RequestHandler(
+            new PubSubSerializer(),
+            $clientConfig + ['libVersion' => PubSubClient::VERSION]
+        );
         $this->projectId = $projectId;
         $this->encode = (bool) $encode;
         $this->info = $info;
@@ -190,13 +208,12 @@ class Topic
      */
     public function create(array $options = [])
     {
-        if (isset($options['schemaSettings']['schema']) && $options['schemaSettings']['schema'] instanceof Schema) {
-            $options['schemaSettings']['schema'] = $options['schemaSettings']['schema']->name();
-        }
-
-        $this->info = $this->connection->createTopic([
-            'name' => $this->name
-        ] + $options);
+        $this->info = $this->requestHandler->sendReq(
+            $this->gapic,
+            'createTopic',
+            [$this->name],
+            $options
+        );
 
         return $this->info;
     }
@@ -269,6 +286,7 @@ class Topic
     {
         $updateMaskPaths = $this->pluck('updateMask', $options, false) ?: [];
 
+        // TODO: please check if this update mask iteration can be simplified/abstracted
         if (!$updateMaskPaths) {
             $iterator = new \RecursiveIteratorIterator(new \RecursiveArrayIterator($topic));
             foreach ($iterator as $leafValue) {
@@ -289,19 +307,44 @@ class Topic
             }
         }
 
+        $maskPaths = [];
+        foreach ($updateMaskPaths as $path) {
+            $maskPaths[] = Serializer::toSnakeCase($path);
+        }
+
+        $fieldMask = new FieldMask([
+            'paths' => $maskPaths
+        ]);
+
+        // TODO: verify if we can simplify or exctract this modification
+        // perhaps we can use the fieldtransformers inside Serializer from ApiCore
         if (isset($topic['schemaSettings']['schema'])) {
             if ($topic['schemaSettings']['schema'] instanceof Schema) {
                 $topic['schemaSettings']['schema'] = $topic['schemaSettings']['schema']->name();
             }
         }
 
-        return $this->info = $this->connection->updateTopic([
-            'name' => $this->name,
-            'topic' => [
-                'name' => $this->name,
-            ] + $topic,
-            'updateMask' => implode(',', $updateMaskPaths)
-        ] + $options);
+        if (isset($topic['schemaSettings'])) {
+            $enc = $topic['schemaSettings']['encoding'] ?? Encoding::ENCODING_UNSPECIFIED;
+
+            if (is_string($enc)) {
+                $topic['schemaSettings']['encoding'] = Encoding::value($enc);
+            }
+
+            $topic['schemaSettings'] = new SchemaSettings($topic['schemaSettings']);
+        }
+
+        // convert the data passed to the proto object
+        $proto = new TopicProto($topic + ['name' => $this->name]);
+
+        $this->info = $this->requestHandler->sendReq(
+            $this->gapic,
+            'updateTopic',
+            [$proto, $fieldMask],
+            $options
+        );
+
+        return $this->info;
     }
 
     /**
@@ -319,9 +362,12 @@ class Topic
      */
     public function delete(array $options = [])
     {
-        $this->connection->deleteTopic($options + [
-            'topic' => $this->name
-        ]);
+        $this->requestHandler->sendReq(
+            $this->gapic,
+            'deleteTopic',
+            [$this->name],
+            $options
+        );
     }
 
     /**
@@ -413,9 +459,13 @@ class Topic
      */
     public function reload(array $options = [])
     {
-        return $this->info = $this->connection->getTopic($options + [
-            'topic' => $this->name
-        ]);
+        $this->info = $this->requestHandler->sendReq(
+            $this->gapic,
+            'getTopic',
+            [$this->name],
+            $options
+        );
+        return $this->info;
     }
 
     /**
@@ -488,12 +538,16 @@ class Topic
     {
         foreach ($messages as &$message) {
             $message = $this->formatMessage($message);
+            $message = (new PubSubSerializer())->decodeMessage(new PubsubMessage(), $message);
+            // new PubsubMessage($message);
         }
 
-        return $this->connection->publishMessage($options + [
-            'topic' => $this->name,
-            'messages' => $messages
-        ]);
+        return $this->requestHandler->sendReq(
+            $this->gapic,
+            'publish',
+            [$this->name, $messages],
+            $options
+        );
     }
 
     /**
@@ -635,8 +689,15 @@ class Topic
                 function ($subscription) {
                     return $this->subscriptionFactory($subscription);
                 },
-                [$this->connection, 'listSubscriptionsByTopic'],
-                $options + ['topic' => $this->name],
+                function($options) {
+                    return $this->requestHandler->sendReq(
+                        $this->gapic,
+                        'listTopicSubscriptions',
+                        [$this->name],
+                        $options
+                    );
+                },
+                $options,
                 [
                     'itemsKey' => 'subscriptions',
                     'resultLimit' => $resultLimit
@@ -665,8 +726,7 @@ class Topic
     public function iam()
     {
         if (!$this->iam) {
-            $iamConnection = new IamTopic($this->connection);
-            $this->iam = new Iam($iamConnection, $this->name);
+            $this->iam = new Iam($this->requestHandler, $this->gapic , $this->name);
         }
 
         return $this->iam;
@@ -685,7 +745,7 @@ class Topic
             'name' => $this->name,
             'projectId' => $this->projectId,
             'info' => $this->info,
-            'connection' => get_class($this->connection)
+            'request_handler' => $this->requestHandler
         ];
     }
 
@@ -731,12 +791,12 @@ class Topic
     private function subscriptionFactory($name, array $info = [])
     {
         return new Subscription(
-            $this->connection,
             $this->projectId,
             $name,
             $this->name,
             $this->encode,
-            $info
+            $info,
+            $this->clientConfig
         );
     }
 }

@@ -17,7 +17,8 @@
 
 namespace Google\Cloud\PubSub;
 
-use Google\Cloud\PubSub\Connection\ConnectionInterface;
+use Google\ApiCore\Veneer\RequestHandler;
+use Google\Cloud\PubSub\V1\SubscriberClient;
 
 /**
  * Represents a Pub/Sub Snapshot
@@ -36,9 +37,20 @@ class Snapshot
     use ResourceNameTrait;
 
     /**
-     * @var ConnectionInterface
+     * The request handler that is responsible for sending a req and
+     * serializing responses into relevant classes.
      */
-    protected $connection;
+    private $requestHandler;
+
+    /**
+     * The GAPIC class to call under the hood.
+     */
+    private $gapic;
+
+    /**
+     * @var Google\ApiCore\Serializer The serializer to be used for PubSub
+     */
+    private $serializer;
 
     /**
      * @var string
@@ -66,7 +78,6 @@ class Snapshot
     private $clientConfig;
 
     /**
-     * @param ConnectionInterface $connection A connection to Cloud Pub/Sub
      * @param string $projectId The current Project ID.
      * @param string $name The snapshot name.
      * @param bool $encode Whether certain request arguments should be base64-encoded.
@@ -81,14 +92,18 @@ class Snapshot
      *        associated with this instance.
      */
     public function __construct(
-        ConnectionInterface $connection,
         $projectId,
         $name,
         $encode,
         array $info = [],
         array $clientConfig = []
     ) {
-        $this->connection = $connection;
+        $this->gapic = new SubscriberClient($clientConfig);
+        $this->serializer = new PubSubSerializer();
+        $this->requestHandler = new RequestHandler(
+            $this->serializer,
+            $clientConfig + ['libVersion' => PubSubClient::VERSION]
+        );
         $this->projectId = $projectId;
         $this->encode = $encode;
         $this->clientConfig = $clientConfig;
@@ -161,11 +176,17 @@ class Snapshot
             throw new \BadMethodCallException('A subscription is required to create a snapshot.');
         }
 
-        return $this->info = $this->connection->createSnapshot([
-            'project' => $this->formatName('project', $this->projectId),
-            'name' => $this->name,
-            'subscription' => $this->info['subscription']
-        ]);
+        $options['project'] = $this->formatName('project', $this->projectId);
+
+        $this->info = $this->requestHandler->sendReq(
+            $this->gapic,
+            'createSnapshot',
+            [$this->name, $this->info['subscription']],
+            $options,
+            true
+        );
+
+        return $this->info;
     }
 
     /**
@@ -183,9 +204,12 @@ class Snapshot
      */
     public function delete(array $options = [])
     {
-        $this->connection->deleteSnapshot([
-            'snapshot' => $this->name
-        ]);
+        $this->requestHandler->sendReq(
+            $this->gapic,
+            'deleteSnapshot',
+            [$this->name],
+            $options
+        );
     }
 
     /**
@@ -202,7 +226,6 @@ class Snapshot
     {
         if ($this->info['topic']) {
             return new Topic(
-                $this->connection,
                 $this->projectId,
                 $this->info['topic'],
                 $this->encode,
@@ -227,7 +250,7 @@ class Snapshot
     public function subscription()
     {
         return $this->info['subscription']
-            ? new Subscription($this->connection, $this->projectId, $this->info['subscription'], null, $this->encode)
+            ? new Subscription($this->projectId, $this->info['subscription'], null, $this->encode)
             : null;
     }
 
@@ -238,10 +261,10 @@ class Snapshot
     public function __debugInfo()
     {
         return [
-            'connection' => get_class($this->connection),
             'projectId' => $this->projectId,
             'name' => $this->name,
-            'info' => $this->info
+            'info' => $this->info,
+            'request_handler' => $this->requestHandler
         ];
     }
 }

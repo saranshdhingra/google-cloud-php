@@ -17,19 +17,21 @@
 
 namespace Google\Cloud\PubSub;
 
-use Google\Auth\FetchAuthTokenInterface;
-use Google\Cloud\Core\ArrayTrait;
-use Google\Cloud\Core\ClientTrait;
+use Google\ApiCore\Traits\ArrayTrait;
+use Google\ApiCore\Traits\ClientTrait;
 use Google\Cloud\Core\Duration;
 use Google\Cloud\Core\Exception\BadRequestException;
-use Google\Cloud\Core\Iterator\ItemIterator;
-use Google\Cloud\Core\Iterator\PageIterator;
+use Google\ApiCore\Veneer\Iterator\ItemIterator;
+use Google\ApiCore\Veneer\Iterator\PageIterator;
 use Google\Cloud\Core\Timestamp;
-use Google\Cloud\PubSub\Connection\Grpc;
-use Google\Cloud\PubSub\Connection\Rest;
+use Google\ApiCore\Veneer\RequestHandler;
+use Google\Cloud\PubSub\Schema;
+use Google\Cloud\PubSub\V1\PublisherClient;
+use Google\Cloud\PubSub\V1\Schema as SchemaProto;
+use Google\Cloud\PubSub\V1\Schema\Type;
 use Google\Cloud\PubSub\V1\SchemaServiceClient;
+use Google\Cloud\PubSub\V1\SubscriberClient;
 use InvalidArgumentException;
-use Psr\Cache\CacheItemPoolInterface;
 
 /**
  * Google Cloud Pub/Sub allows you to send and receive
@@ -92,9 +94,14 @@ class PubSubClient
     const FULL_CONTROL_SCOPE = 'https://www.googleapis.com/auth/pubsub';
 
     /**
-     * @var Connection\ConnectionInterface
+     * The request handler that is responsible for sending a req and
+     * serializing responses into relevant classes.
      */
-    protected $connection;
+    private $requestHandler;
+
+    private $publisherGapic;
+    private $subscriberGapic;
+    private $schemaGapic;
 
     /**
      * @var bool
@@ -147,8 +154,6 @@ class PubSubClient
      */
     public function __construct(array $config = [])
     {
-        $this->clientConfig = $config;
-        $connectionType = $this->getConnectionType($config);
         $emulatorHost = getenv('PUBSUB_EMULATOR_HOST');
         $config += [
             'scopes' => [self::FULL_CONTROL_SCOPE],
@@ -156,14 +161,16 @@ class PubSubClient
             'hasEmulator' => (bool) $emulatorHost,
             'emulatorHost' => $emulatorHost
         ];
-
-        if ($connectionType === 'grpc') {
-            $this->connection = new Grpc($this->configureAuthentication($config));
-            $this->encode = false;
-        } else {
-            $this->connection = new Rest($this->configureAuthentication($config));
-            $this->encode = true;
-        }
+        // TODO: remove this in favour of something from gax
+        $config = $this->configureAuthentication($config);
+        $this->clientConfig = $config;
+        $this->publisherGapic = new PublisherClient($config);
+        $this->subscriberGapic = new SubscriberClient($config);
+        $this->schemaGapic = new SchemaServiceClient($config);
+        $this->requestHandler = new RequestHandler(
+            new PubSubSerializer(),
+            $config + ['libVersion' => self::VERSION]
+        );
     }
 
     /**
@@ -247,14 +254,22 @@ class PubSubClient
     public function topics(array $options = [])
     {
         $resultLimit = $this->pluck('resultLimit', $options, false);
+        $projectId = $this->formatName('project', $this->projectId);
 
         return new ItemIterator(
             new PageIterator(
                 function (array $topic) {
                     return $this->topicFactory($topic['name'], $topic);
                 },
-                [$this->connection, 'listTopics'],
-                $options + ['project' => $this->formatName('project', $this->projectId)],
+                function($options) use ($projectId) {
+                    return $this->requestHandler->sendReq(
+                        $this->publisherGapic,
+                        'listTopics',
+                        [$projectId],
+                        $options
+                    );
+                },
+                $options,
                 [
                     'itemsKey' => 'topics',
                     'resultLimit' => $resultLimit
@@ -345,6 +360,7 @@ class PubSubClient
      */
     public function subscriptions(array $options = [])
     {
+        $projectId = $this->formatName('project', $this->projectId);
         $resultLimit = $this->pluck('resultLimit', $options, false);
 
         return new ItemIterator(
@@ -356,8 +372,15 @@ class PubSubClient
                         $subscription
                     );
                 },
-                [$this->connection, 'listSubscriptions'],
-                $options + ['project' => $this->formatName('project', $this->projectId)],
+                function($options) use ($projectId) {
+                    return $this->requestHandler->sendReq(
+                        $this->subscriberGapic,
+                        'listSubscriptions',
+                        [$projectId],
+                        $options
+                    );
+                },
+                $options,
                 [
                     'itemsKey' => 'subscriptions',
                     'resultLimit' => $resultLimit
@@ -407,7 +430,7 @@ class PubSubClient
      */
     public function snapshot($name, array $info = [])
     {
-        return new Snapshot($this->connection, $this->projectId, $name, $this->encode, $info);
+        return new Snapshot($this->projectId, $name, $this->encode, $info);
     }
 
     /**
@@ -438,21 +461,28 @@ class PubSubClient
      */
     public function snapshots(array $options = [])
     {
+        $projectId = $this->formatName('project', $this->projectId);
         $resultLimit = $this->pluck('resultLimit', $options, false);
 
         return new ItemIterator(
             new PageIterator(
                 function (array $snapshot) {
                     return new Snapshot(
-                        $this->connection,
                         $this->projectId,
                         $this->pluckName('snapshot', $snapshot['name']),
                         $this->encode,
                         $snapshot
                     );
                 },
-                [$this->connection, 'listSnapshots'],
-                ['project' => $this->formatName('project', $this->projectId)] + $options,
+                function($options) use ($projectId) {
+                    return $this->requestHandler->sendReq(
+                        $this->subscriberGapic,
+                        'listSnapshots',
+                        [$projectId],
+                        $options
+                    );
+                },
+                $options,
                 [
                     'itemsKey' => 'snapshots',
                     'resultLimit' => $resultLimit
@@ -476,9 +506,9 @@ class PubSubClient
     public function schema($schemaId, array $info = [])
     {
         return new Schema(
-            $this->connection,
             SchemaServiceClient::schemaName($this->projectId, $schemaId),
-            $info
+            $info,
+            $this->clientConfig
         );
     }
 
@@ -505,12 +535,20 @@ class PubSubClient
      */
     public function createSchema($schemaId, $type, $definition, array $options = [])
     {
-        $res = $this->connection->createSchema([
-            'parent' => SchemaServiceClient::projectName($this->projectId),
-            'schemaId' => $schemaId,
+        $type = is_string($type) ? Type::value($type) : $type;
+        $parent = $this->schemaGapic::projectName($this->projectId);
+        $schema = new SchemaProto([
             'type' => $type,
             'definition' => $definition,
-        ] + $options);
+        ]);
+        $options['schemaId'] = $schemaId;
+
+        $res = $this->requestHandler->sendReq(
+            $this->schemaGapic,
+            'createSchema',
+            [$parent, $schema],
+            $options
+        );
 
         return $this->schema($schemaId, $res);
     }
@@ -552,16 +590,24 @@ class PubSubClient
      */
     public function schemas(array $options = [])
     {
+        $projectId = $this->formatName('project', $this->projectId);
         $resultLimit = $this->pluck('resultLimit', $options, false);
 
         return new ItemIterator(
             new PageIterator(
                 function (array $schema) {
-                    $parts = SchemaServiceClient::parseName($schema['name'], 'schema');
+                    $parts = $this->schemaGapic::parseName($schema['name'], 'schema');
                     return $this->schema($parts['schema'], $schema);
                 },
-                [$this->connection, 'listSchemas'],
-                ['parent' => $this->formatName('project', $this->projectId)] + $options,
+                function($options) use($projectId){
+                    return $this->requestHandler->sendReq(
+                        $this->schemaGapic,
+                        'listSchemas',
+                        [$projectId],
+                        $options
+                    );
+                },
+                $options,
                 [
                     'itemsKey' => 'schemas',
                     'resultLimit' => $resultLimit
@@ -604,10 +650,16 @@ class PubSubClient
      */
     public function validateSchema(array $schema, array $options = [])
     {
-        return $this->connection->validateSchema([
-            'parent' => SchemaServiceClient::projectName($this->projectId),
-            'schema' => $schema,
-        ] + $options);
+        $parent = $this->schemaGapic::projectName($this->projectId);
+        $schema['type'] = Type::value($schema['type']);
+        $schema = new SchemaProto($schema);
+
+        return $this->requestHandler->sendReq(
+            $this->schemaGapic,
+            'validateSchema',
+            [$parent, $schema],
+            $options
+        );
     }
 
     /**
@@ -650,6 +702,8 @@ class PubSubClient
      */
     public function validateMessage($schema, $message, $encoding, array $options = [])
     {
+        $parent = $this->schemaGapic::projectName($this->projectId);
+
         if (is_string($schema)) {
             $options['name'] = $schema;
         } elseif ($schema instanceof Schema) {
@@ -663,11 +717,15 @@ class PubSubClient
             ));
         }
 
-        return $this->connection->validateMessage([
-            'parent' => SchemaServiceClient::projectName($this->projectId),
-            'message' => $message,
-            'encoding' => $encoding,
-        ] + $options);
+        $options['message'] = $message;
+        $options['encoding'] = $encoding;
+
+        return $this->requestHandler->sendReq(
+            $this->schemaGapic,
+            'validateMessage',
+            [$parent],
+            $options
+        );
     }
 
     /**
@@ -688,7 +746,7 @@ class PubSubClient
      */
     public function consume(array $requestData)
     {
-        return $this->messageFactory($requestData, $this->connection, $this->projectId, $this->encode);
+        return $this->messageFactory($requestData, $this->projectId, $this->encode);
     }
 
     /**
@@ -740,7 +798,6 @@ class PubSubClient
     private function topicFactory($name, array $info = [])
     {
         return new Topic(
-            $this->connection,
             $this->projectId,
             $name,
             $this->encode,
@@ -768,12 +825,12 @@ class PubSubClient
             : $topic;
 
         return new Subscription(
-            $this->connection,
             $this->projectId,
             $name,
             $topic,
             $this->encode,
-            $info
+            $info,
+            $this->clientConfig
         );
     }
 
@@ -784,10 +841,6 @@ class PubSubClient
     public function __debugInfo()
     {
         $debugInfo = [];
-        if ($this->connection) {
-            $debugInfo['connection'] = get_class($this->connection);
-        }
-
         $debugInfo['projectId'] = $this->projectId;
         $debugInfo['encode'] = $this->encode;
 

@@ -17,8 +17,10 @@
 
 namespace Google\Cloud\PubSub;
 
-use Google\Cloud\Core\Exception\NotFoundException;
-use Google\Cloud\PubSub\Connection\ConnectionInterface;
+use Google\ApiCore\Veneer\Exception\NotFoundException;
+use Google\ApiCore\Veneer\RequestHandler;
+use Google\Cloud\PubSub\V1\SchemaServiceClient;
+use Google\Cloud\PubSub\V1\SchemaView;
 
 /**
  * Represents a Pub/Sub Schema resource.
@@ -39,9 +41,20 @@ use Google\Cloud\PubSub\Connection\ConnectionInterface;
 class Schema
 {
     /**
-     * @var ConnectionInterface
+     * The request handler that is responsible for sending a req and
+     * serializing responses into relevant classes.
      */
-    private $connection;
+    private $requestHandler;
+
+    /**
+     * The GAPIC class to call under the hood.
+     */
+    private $gapic;
+
+    /**
+     * @var Google\ApiCore\Serializer The serializer to be used for PubSub
+     */
+    private $serializer;
 
     /**
      * @var string
@@ -54,16 +67,21 @@ class Schema
     private $info;
 
     /**
-     * @param ConnectionInterface $connection A connection to Cloud Pub/Sub
      * @param string $name The schema name.
      * @param array $info [optional] Schema data.
      */
     public function __construct(
-        ConnectionInterface $connection,
         $name,
-        array $info = []
+        array $info = [],
+        $clientConfig = []
     ) {
-        $this->connection = $connection;
+        $this->gapic = new SchemaServiceClient($clientConfig);
+        $this->serializer = new PubSubSerializer();
+        $this->requestHandler = new RequestHandler(
+            $this->serializer,
+            ['libVersion' => PubSubClient::VERSION]
+        );
+
         $this->name = $name;
         $this->info = $info;
     }
@@ -96,9 +114,12 @@ class Schema
      */
     public function delete(array $options = [])
     {
-        return $this->connection->deleteSchema([
-            'name' => $this->name
-        ] + $options);
+        return $this->requestHandler->sendReq(
+            $this->gapic,
+            'deleteSchema',
+            [$this->name],
+            $options
+        );
     }
 
     /**
@@ -167,9 +188,16 @@ class Schema
             'view' => 'FULL',
         ];
 
-        return $this->info = $this->connection->getSchema([
-            'name' => $this->name,
-        ] + $options);
+        if (is_string($options['view'])) {
+            $options['view'] = SchemaView::value($options['view']);
+        }
+
+        return $this->requestHandler->sendReq(
+            $this->gapic,
+            'getSchema',
+            [$this->name],
+            $options
+        );
     }
 
     /**

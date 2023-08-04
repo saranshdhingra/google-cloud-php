@@ -17,18 +17,25 @@
 
 namespace Google\Cloud\PubSub;
 
-use Google\Cloud\Core\ArrayTrait;
+use Google\ApiCore\Traits\ArrayTrait;
 use Google\Cloud\Core\Duration;
-use Google\Cloud\Core\Exception\NotFoundException;
-use Google\Cloud\Core\Exception\BadRequestException;
-use Google\Cloud\Core\ExponentialBackoff;
+use Google\ApiCore\Veneer\Exception\NotFoundException;
+use Google\ApiCore\Veneer\Exception\BadRequestException;
+use Google\ApiCore\Veneer\ExponentialBackoff;
 use Google\Cloud\Core\Iam\Iam;
 use Google\Cloud\Core\Timestamp;
-use Google\Cloud\Core\TimeTrait;
-use Google\Cloud\Core\ValidateTrait;
-use Google\Cloud\PubSub\Connection\ConnectionInterface;
-use Google\Cloud\PubSub\Connection\IamSubscription;
+use Google\ApiCore\Traits\TimeTrait;
+use Google\ApiCore\Veneer\RequestHandler;
+use Google\ApiCore\Traits\ValidateTrait;
 use Google\Cloud\PubSub\IncomingMessageTrait;
+use Google\Cloud\PubSub\V1\DeadLetterPolicy;
+use Google\Cloud\PubSub\V1\ExpirationPolicy;
+use Google\Cloud\PubSub\V1\PushConfig;
+use Google\Cloud\PubSub\V1\RetryPolicy;
+use Google\Cloud\PubSub\V1\SubscriberClient;
+use Google\Cloud\PubSub\V1\Subscription as SubscriptionProto;
+use Google\Protobuf\FieldMask;
+use Google\Protobuf\Timestamp as ProtobufTimestamp;
 use InvalidArgumentException;
 
 /**
@@ -89,9 +96,20 @@ class Subscription
     const MAX_MESSAGES = 1000;
 
     /**
-     * @var ConnectionInterface
+     * The request handler that is responsible for sending a req and
+     * serializing responses into relevant classes.
      */
-    protected $connection;
+    private $requestHandler;
+
+    /**
+     * The GAPIC class to call under the hood.
+     */
+    private $gapic;
+
+    /**
+     * @var Google\ApiCore\Serializer The serializer to be used for PubSub
+     */
+    private $serializer;
 
     /**
      * @var string
@@ -157,7 +175,6 @@ class Subscription
      * The idiomatic way to use this class is through the PubSubClient or Topic,
      * but you can instantiate it directly as well.
      *
-     * @param ConnectionInterface $connection The service connection object
      * @param string $projectId The current project
      * @param string $name The subscription name
      * @param string $topicName The topic name the subscription is attached to
@@ -165,14 +182,19 @@ class Subscription
      * @param array $info [optional] Subscription info. Used to pre-populate the object.
      */
     public function __construct(
-        ConnectionInterface $connection,
         $projectId,
         $name,
         $topicName,
         $encode,
-        array $info = []
+        array $info = [],
+        $clientConfig = []
     ) {
-        $this->connection = $connection;
+        $this->gapic = new SubscriberClient($clientConfig);
+        $this->serializer = new PubSubSerializer();
+        $this->requestHandler = new RequestHandler(
+            $this->serializer,
+            ['libVersion' => PubSubClient::VERSION]
+        );
         $this->projectId = $projectId;
         $this->encode = (bool) $encode;
         $this->info = $info;
@@ -368,10 +390,30 @@ class Subscription
 
         $options = $this->formatSubscriptionDurations($options);
 
-        $this->info = $this->connection->createSubscription([
-            'name' => $this->name,
-            'topic' => $this->topicName
-        ] + $this->formatDeadLetterPolicyForApi($options));
+        // convert optional args to protos
+        if (isset($options['expirationPolicy'])) {
+            $options['expirationPolicy'] = new ExpirationPolicy($options['expirationPolicy']);
+        }
+
+        if (isset($options['messageRetentionDuration'])) {
+            $options['messageRetentionDuration'] = new Duration(
+                $this->transformDuration($options['messageRetentionDuration'])
+            );
+        }
+
+        if (isset($options['retryPolicy'])) {
+            $options['retryPolicy'] = new RetryPolicy($options['retryPolicy']);
+        }
+
+        if (isset($options['deadLetterPolicy'])) {
+            $options['deadLetterPolicy'] = new DeadLetterPolicy($options['deadLetterPolicy']);
+        }
+
+        $this->info = $this->requestHandler->sendReq(
+            $this->gapic,
+            'createSubscription',
+            [$this->name,$this->topicName],
+            $this->formatDeadLetterPolicyForApi($options));
 
         return $this->info;
     }
@@ -540,17 +582,27 @@ class Subscription
             }
         }
 
+        $maskPaths = [];
+        foreach ($updateMaskPaths as $path) {
+            $maskPaths[] = $this->serializer::toSnakeCase($path);
+        }
+
+        $fieldMask = new FieldMask([
+            'paths' => $maskPaths
+        ]);
+
         $subscription = $this->formatSubscriptionDurations($subscription);
 
-        $subscription = [
+        $subscriptionProto = new SubscriptionProto([
             'name' => $this->name
-        ] + $this->formatDeadLetterPolicyForApi($subscription);
+        ] + $this->formatDeadLetterPolicyForApi($subscription));
 
-        return $this->info = $this->connection->updateSubscription([
-            'name' => $this->name,
-            'subscription' => $subscription,
-            'updateMask' => implode(',', $updateMaskPaths)
-        ] + $options);
+        return $this->info = $this->requestHandler->sendReq(
+            $this->gapic,
+            'updateSubscription',
+            [$subscriptionProto, $fieldMask],
+            $options
+        );
     }
 
     /**
@@ -568,9 +620,12 @@ class Subscription
      */
     public function delete(array $options = [])
     {
-        $this->connection->deleteSubscription($options + [
-            'subscription' => $this->name
-        ]);
+        $this->requestHandler->sendReq(
+            $this->gapic,
+            'deleteSubscription',
+            [$this->name],
+            $options
+        );
     }
 
     /**
@@ -650,9 +705,12 @@ class Subscription
      */
     public function reload(array $options = [])
     {
-        return $this->info = $this->connection->getSubscription($options + [
-            'subscription' => $this->name
-        ]);
+        return $this->info = $this->requestHandler->sendReq(
+            $this->gapic,
+            'getSubscription',
+            [$this->name],
+            $options
+        );
     }
 
     /**
@@ -683,15 +741,18 @@ class Subscription
     public function pull(array $options = [])
     {
         $messages = [];
-        $options['maxMessages'] = $options['maxMessages'] ?? self::MAX_MESSAGES;
+        $maxMessages = $this->pluck('maxMessages', $options, false) ?? self::MAX_MESSAGES;
 
-        $response = $this->connection->pull($options + [
-            'subscription' => $this->name
-        ]);
+        $response = $this->requestHandler->sendReq(
+            $this->gapic,
+            'pull',
+            [$this->name, $maxMessages],
+            $options
+        );
 
         if (isset($response['receivedMessages'])) {
             foreach ($response['receivedMessages'] as $message) {
-                $messages[] = $this->messageFactory($message, $this->connection, $this->projectId, $this->encode);
+                $messages[] = $this->messageFactory($message, $this->projectId, $this->encode);
             }
         }
 
@@ -790,10 +851,7 @@ class Subscription
         // the rpc may throw errors for a sub with EOD enabled
         // but we don't act on the exception to maintain compatibility
         try {
-            $this->connection->acknowledge($options + [
-                'subscription' => $this->name,
-                'ackIds' => $this->getMessageAckIds($messages)
-            ]);
+            $this->sendAckRequest($messages, $options);
         } catch (BadRequestException $e) {
             // bubble up the error if the exception isn't an EOD exception
             if (!$this->isExceptionExactlyOnce($e)) {
@@ -812,10 +870,7 @@ class Subscription
     private function acknowledgeBatchWithRetries(array $messages, array $options = [])
     {
         $actionFunc = function (&$messages, $options) {
-            $this->connection->acknowledge($options + [
-                'subscription' => $this->name,
-                'ackIds' => $this->getMessageAckIds($messages)
-            ]);
+            $this->sendAckRequest($messages, $options);
         };
 
         return $this->retryEodAction($actionFunc, $messages, $options);
@@ -928,11 +983,7 @@ class Subscription
         // the rpc may throw errors for a sub with EOD enabled
         // but we don't act on the exception to maintain compatibility
         try {
-            $this->connection->modifyAckDeadline($options + [
-                'subscription' => $this->name,
-                'ackIds' => $this->getMessageAckIds($messages),
-                'ackDeadlineSeconds' => $seconds
-            ]);
+            $this->sendModAckRequest($messages, $seconds, $options);
         } catch (BadRequestException $e) {
             // bubble up the error if the exception isn't an EOD exception
             if (!$this->isExceptionExactlyOnce($e)) {
@@ -958,11 +1009,7 @@ class Subscription
     private function modifyAckDeadlineBatchWithRetries(array $messages, $seconds, array $options)
     {
         $actionFunc = function (&$messages, $options) use ($seconds) {
-            $this->connection->modifyAckDeadline($options + [
-                'subscription' => $this->name,
-                'ackIds' => $this->getMessageAckIds($messages),
-                'ackDeadlineSeconds' => $seconds
-            ]);
+            $this->sendModAckRequest($messages, $seconds, $options);
         };
 
         return $this->retryEodAction($actionFunc, $messages, $options);
@@ -1091,10 +1138,17 @@ class Subscription
      */
     public function modifyPushConfig(array $pushConfig, array $options = [])
     {
-        $this->connection->modifyPushConfig($options + [
-            'subscription' => $this->name,
-            'pushConfig' => $pushConfig
-        ]);
+        $pushConfig = $this->serializer->decodeMessage(
+            new PushConfig(),
+            $pushConfig
+        );
+
+        $this->requestHandler->sendReq(
+            $this->gapic,
+            'modifyPushConfig',
+            [$this->name, $pushConfig],
+            $options
+        );
     }
 
     /**
@@ -1118,10 +1172,15 @@ class Subscription
      */
     public function seekToTime(Timestamp $timestamp, array $options = [])
     {
-        return $this->connection->seek([
-            'subscription' => $this->name,
-            'time' => $timestamp->formatAsString()
-        ] + $options);
+        $options['time'] = $this->serializer->decodeMessage(new ProtobufTimestamp(), $timestamp->formatForApi());
+
+        return $this->requestHandler->sendReq(
+            $this->gapic,
+            'seek',
+            [$this->name],
+            $options,
+            true
+        );
     }
 
     /**
@@ -1144,10 +1203,15 @@ class Subscription
      */
     public function seekToSnapshot(Snapshot $snapshot, array $options = [])
     {
-        return $this->connection->seek([
-            'subscription' => $this->name,
-            'snapshot' => $snapshot->name()
-        ] + $options);
+        $options['snapshot'] = $snapshot->name();
+
+        return $this->requestHandler->sendReq(
+            $this->gapic,
+            'seek',
+            [$this->name],
+            $options,
+            true
+        );
     }
 
     /**
@@ -1167,9 +1231,12 @@ class Subscription
      */
     public function detach(array $options = [])
     {
-        return $this->connection->detachSubscription([
-            'subscription' => $this->name
-        ] + $options);
+        return $this->requestHandler->sendReq(
+            $this->gapic,
+            'detachSubscription',
+            [$this->name],
+            $options
+        );
     }
 
     /**
@@ -1192,8 +1259,7 @@ class Subscription
     public function iam()
     {
         if (!$this->iam) {
-            $iamConnection = new IamSubscription($this->connection);
-            $this->iam = new Iam($iamConnection, $this->name);
+            $this->iam = new Iam($this->requestHandler, $this->gapic , $this->name);
         }
 
         return $this->iam;
@@ -1311,7 +1377,7 @@ class Subscription
             'topicName' => $this->topicName,
             'projectId' => $this->projectId,
             'info' => $this->info,
-            'connection' => get_class($this->connection)
+            'request_handler' => $this->requestHandler
         ];
     }
 
@@ -1358,5 +1424,63 @@ class Subscription
     public static function getMaxRetries()
     {
         return self::$exactlyOnceDeliveryMaxRetries;
+    }
+
+    private function transformDuration($v)
+    {
+        if (is_string($v)) {
+            $d = explode('.', trim($v, 's'));
+            if (count($d) < 2) {
+                $seconds = $d[0];
+                $nanos = 0;
+            } else {
+                $seconds = (int) $d[0];
+                $nanos = $this->convertFractionToNanoSeconds($d[1]);
+            }
+        } elseif ($v instanceof CoreDuration) {
+            $d = $v->get();
+            $seconds = $d['seconds'];
+            $nanos = $d['nanos'];
+        }
+
+        return [
+            'seconds' => $seconds,
+            'nanos' => $nanos
+        ];
+    }
+
+    /**
+     * Helper function that sends an ack request for the given msgs.
+     * 
+     * @param array $messages List of messages to ack.
+     * @param array $options
+     */
+    private function sendAckRequest(array $messages, array $options) {
+        $ackIds = $this->getMessageAckIds($messages);
+
+        $this->requestHandler->sendReq(
+            $this->gapic,
+            'acknowledge',
+            [$this->name,$ackIds],
+            $options
+        );
+    }
+
+    /**
+     * Helper function that sends a modack request for the given msgs.
+     * 
+     * @param array $messages List of messages to ack.
+     * @param int $seconds The new deadline in seconds.
+     * @param array $options
+     */
+    private function sendModAckRequest(array $messages, $seconds, array $options) {
+        $ackIds = $this->getMessageAckIds($messages);
+
+        $this->requestHandler->sendReq(
+            $this->gapic,
+            'modifyAckDeadline',
+            [$this->name, $ackIds, $seconds],
+            $options
+        );
     }
 }
