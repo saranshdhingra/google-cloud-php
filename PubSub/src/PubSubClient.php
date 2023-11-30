@@ -160,11 +160,13 @@ class PubSubClient
      */
     public function __construct(array $config = [])
     {
-        $config = $this->getDefaultClientConfig($config, [
-            'emulatorHost' => getenv('PUBSUB_EMULATOR_HOST'),
-            'defaultScope' => self::FULL_CONTROL_SCOPE,
-            'libVersion' => self::VERSION
-        ]);
+        $emulatorHost = getenv('PUBSUB_EMULATOR_HOST');
+        $config += [
+            'scopes' => [self::FULL_CONTROL_SCOPE],
+            'projectIdRequired' => true,
+            'hasEmulator' => (bool) $emulatorHost,
+            'emulatorHost' => $emulatorHost
+        ];
         $this->clientConfig = $config;
 
 
