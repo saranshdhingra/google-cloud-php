@@ -167,7 +167,7 @@ class Iam
             $request = $policy;
         }
 
-        $this->policy = $this->requestHandler->sendReq(
+        $this->policy = $this->requestHandler->sendRequest(
             $this->gapic,
             'setIamPolicy',
             [$this->resource, $policy],
@@ -196,7 +196,7 @@ class Iam
      */
     public function testPermissions(array $permissions, array $options = [])
     {
-        $res = $this->requestHandler->sendReq(
+        $res = $this->requestHandler->sendRequest(
             $this->gapic,
             'testIamPermissions',
             [$this->resource, $permissions],
@@ -219,7 +219,7 @@ class Iam
      */
     public function reload(array $options = [])
     {
-        $this->policy = $this->requestHandler->sendReq(
+        $this->policy = $this->requestHandler->sendRequest(
             $this->gapic,
             'getIamPolicy',
             [$this->resource],
