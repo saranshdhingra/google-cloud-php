@@ -226,7 +226,7 @@ class Topic
      */
     public function create(array $options = [])
     {
-        $this->info = $this->requestHandler->sendReq(
+        $this->info = $this->requestHandler->sendRequest(
             PublisherClient::class,
             'createTopic',
             [$this->name],
@@ -355,7 +355,7 @@ class Topic
         // convert the data passed to the proto object
         $proto = new TopicProto($topic + ['name' => $this->name]);
 
-        $this->info = $this->requestHandler->sendReq(
+        $this->info = $this->requestHandler->sendRequest(
             PublisherClient::class,
             'updateTopic',
             [$proto, $fieldMask],
@@ -380,7 +380,7 @@ class Topic
      */
     public function delete(array $options = [])
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             PublisherClient::class,
             'deleteTopic',
             [$this->name],
@@ -477,7 +477,7 @@ class Topic
      */
     public function reload(array $options = [])
     {
-        $this->info = $this->requestHandler->sendReq(
+        $this->info = $this->requestHandler->sendRequest(
             PublisherClient::class,
             'getTopic',
             [$this->name],
@@ -559,7 +559,7 @@ class Topic
             $message = $this->requestHandler->getSerializer()->decodeMessage(new PubsubMessage(), $message);
         }
 
-        return $this->requestHandler->sendReq(
+        return $this->requestHandler->sendRequest(
             PublisherClient::class,
             'publish',
             [$this->name, $messages],
@@ -722,7 +722,7 @@ class Topic
                     return $this->subscriptionFactory($subscription);
                 },
                 function ($options) {
-                    return $this->requestHandler->sendReq(
+                    return $this->requestHandler->sendRequest(
                         PublisherClient::class,
                         'listTopicSubscriptions',
                         [$this->name],

@@ -84,7 +84,7 @@ class SnapshotTest extends TestCase
 
     public function testCreate()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('createSnapshot'), 2],
                 [Argument::exact(true), 5]
@@ -112,7 +112,7 @@ class SnapshotTest extends TestCase
     public function testDelete()
     {
         $snapshotName = 'projects/'. self::PROJECT .'/snapshots/'. self::SNAPSHOT_ID;
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('deleteSnapshot'), 2],
                 [Argument::withEntry(0, $snapshotName), 3]

@@ -118,7 +118,7 @@ class BatchPublisherTest extends TestCase
         $tokensWithBKey = $this->getPublishTokensWithOrderingKey('b', $messages);
         $tokensWithEmptyKey = $this->getPublishTokensWithOrderingKey('', $messages);
 
-        $requestHandler->sendReq(
+        $requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getTopic'), 2]
             ])
@@ -126,13 +126,13 @@ class BatchPublisherTest extends TestCase
             'name' => self::TOPIC_NAME,
         ]);
 
-        $requestHandler->sendReq(
+        $requestHandler->sendRequest(
             ...$tokensWithAKey
         )->will(function ($args) use ($requestHandler, $tokensWithBKey, $tokensWithEmptyKey) {
-            $requestHandler->sendReq(
+            $requestHandler->sendRequest(
                 ...$tokensWithBKey
             )->will(function ($args) use ($requestHandler, $tokensWithEmptyKey) {
-                $requestHandler->sendReq(
+                $requestHandler->sendRequest(
                     ...$tokensWithEmptyKey
                 )->will(function ($args) {
                     // msgs are at [2][1] in the $args.
@@ -213,7 +213,7 @@ class BatchPublisherTest extends TestCase
             'data' => 'foo'
         ]];
 
-        $requestHandler->sendReq(
+        $requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('publish'), 2],
                 [Argument::withEntry('compressionOptions', [

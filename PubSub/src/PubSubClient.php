@@ -292,7 +292,7 @@ class PubSubClient
                     return $this->topicFactory($topic['name'], $topic);
                 },
                 function ($options) use ($projectId) {
-                    return $this->requestHandler->sendReq(
+                    return $this->requestHandler->sendRequest(
                         PublisherClient::class,
                         'listTopics',
                         [$projectId],
@@ -403,7 +403,7 @@ class PubSubClient
                     );
                 },
                 function ($options) use ($projectId) {
-                    return $this->requestHandler->sendReq(
+                    return $this->requestHandler->sendRequest(
                         SubscriberClient::class,
                         'listSubscriptions',
                         [$projectId],
@@ -506,7 +506,7 @@ class PubSubClient
                     );
                 },
                 function ($options) use ($projectId) {
-                    return $this->requestHandler->sendReq(
+                    return $this->requestHandler->sendRequest(
                         SubscriberClient::class,
                         'listSnapshots',
                         [$projectId],
@@ -575,7 +575,7 @@ class PubSubClient
         ]);
         $options['schemaId'] = $schemaId;
 
-        $res = $this->requestHandler->sendReq(
+        $res = $this->requestHandler->sendRequest(
             SchemaServiceClient::class,
             'createSchema',
             [$parent, $schema],
@@ -632,7 +632,7 @@ class PubSubClient
                     return $this->schema($parts['schema'], $schema);
                 },
                 function ($options) use ($projectId) {
-                    return $this->requestHandler->sendReq(
+                    return $this->requestHandler->sendRequest(
                         SchemaServiceClient::class,
                         'listSchemas',
                         [$projectId],
@@ -684,7 +684,7 @@ class PubSubClient
     {
         $parent = SchemaServiceClient::projectName($this->projectId);
 
-        return $this->requestHandler->sendReq(
+        return $this->requestHandler->sendRequest(
             SchemaServiceClient::class,
             'validateSchema',
             [$parent, $schema],
@@ -750,7 +750,7 @@ class PubSubClient
         $options['message'] = $message;
         $options['encoding'] = $encoding;
 
-        return $this->requestHandler->sendReq(
+        return $this->requestHandler->sendRequest(
             SchemaServiceClient::class,
             'validateMessage',
             [$parent],

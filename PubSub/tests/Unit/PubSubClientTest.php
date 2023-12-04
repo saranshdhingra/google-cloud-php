@@ -69,14 +69,14 @@ class PubSubClientTest extends TestCase
     {
         $topicName = 'test-topic';
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument(Argument::exact('createTopic'), 2)
         )->willReturn([
             'name' => SubscriberClient::topicName(self::PROJECT, $topicName)
         ]);
 
         // Set this to zero to make sure we're getting the cached result
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             Argument::any(),
             Argument::exact('getTopic'),
             Argument::cetera()
@@ -98,7 +98,7 @@ class PubSubClientTest extends TestCase
     {
         $topicName = 'test-topic';
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument(Argument::exact('getTopic'), 2)
         )->willReturn([
             'name' => SubscriberClient::topicName(self::PROJECT, $topicName)
@@ -126,7 +126,7 @@ class PubSubClientTest extends TestCase
             ]
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument(Argument::exact('listTopics'), 2)
         )->willReturn([
                 'topics' => $topicResult
@@ -159,7 +159,7 @@ class PubSubClientTest extends TestCase
             ]
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             Argument::any(),
             Argument::exact('listTopics'),
             Argument::any(),
@@ -197,13 +197,13 @@ class PubSubClientTest extends TestCase
 
     public function testSubscribe()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument(Argument::exact('createSubscription'), 2)
         )->willReturn([
             'test' => 'value'
         ])->shouldBeCalledTimes(1);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             Argument::any(),
             Argument::exact('getSubscription'),
             Argument::cetera()
@@ -221,7 +221,7 @@ class PubSubClientTest extends TestCase
 
     public function testSubscription()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument(Argument::exact('getSubscription'), 2)
         )->shouldBeCalledTimes(1)
         ->willReturn(['foo' => 'bar']);
@@ -252,7 +252,7 @@ class PubSubClientTest extends TestCase
             ]
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument(Argument::exact('listSubscriptions'), 2)
         )->willReturn([
             'subscriptions' => $subscriptionResult
@@ -288,7 +288,7 @@ class PubSubClientTest extends TestCase
             ]
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             Argument::any(),
             Argument::exact('listSubscriptions'),
             Argument::any(),
@@ -326,7 +326,7 @@ class PubSubClientTest extends TestCase
 
     public function testCreateSnapshot()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument(Argument::exact('createSnapshot'), 2)
         )->shouldBeCalled()
         ->willReturn([]);
@@ -359,7 +359,7 @@ class PubSubClientTest extends TestCase
             ]
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument(Argument::exact('listSnapshots'), 2)
         )->willReturn([
             'snapshots' => $snapshotResult
@@ -392,7 +392,7 @@ class PubSubClientTest extends TestCase
             ]
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             Argument::any(),
             Argument::exact('listSnapshots'),
             Argument::any(),
@@ -444,7 +444,7 @@ class PubSubClientTest extends TestCase
         $definition = 'bar';
         $res = ['a' => 'b'];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument(Argument::exact('createSchema'), 2)
         )->willReturn(['a' => 'b']);
 
@@ -472,7 +472,7 @@ class PubSubClientTest extends TestCase
             ]
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument(Argument::exact('listSchemas'), 2)
         )->willReturn([
             'schemas' => $schemaResult
@@ -495,7 +495,7 @@ class PubSubClientTest extends TestCase
 
     public function testValidateSchema()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument(Argument::exact('validateSchema'), 2)
         )->shouldBeCalled()->willReturn(['foo' => 'bar']);
 
@@ -512,7 +512,7 @@ class PubSubClientTest extends TestCase
     {
         $this->expectException(BadRequestException::class);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument(Argument::exact('validateSchema'), 2)
         )->shouldBeCalled()
         ->willThrow(new BadRequestException('foo'));
@@ -529,7 +529,7 @@ class PubSubClientTest extends TestCase
     {
         $message = 'hello';
         $encoding = 'JSON';
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             Argument::any(),
             Argument::exact('validateMessage'),
             [SubscriberClient::projectName(self::PROJECT)],

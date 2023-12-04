@@ -92,7 +92,7 @@ class SubscriptionTest extends TestCase
 
     public function testDetached()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSubscription'), 2],
                 [[self::SUBSCRIPTION], 3]
@@ -108,7 +108,7 @@ class SubscriptionTest extends TestCase
 
     public function testCreate()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('createSubscription'), 2],
                 [Argument::withEntry('foo', 'bar'), 4]
@@ -118,7 +118,7 @@ class SubscriptionTest extends TestCase
             'topic' => self::TOPIC
         ])->shouldBeCalledTimes(1);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSubscription'), 2]
             ])
@@ -151,7 +151,7 @@ class SubscriptionTest extends TestCase
     {
         $prop = 'ack_deadline_seconds';
         $val = 5;
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('updateSubscription'), 2],
                 [
@@ -180,7 +180,7 @@ class SubscriptionTest extends TestCase
 
     public function testDurations()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('updateSubscription'), 2]
             ])
@@ -188,7 +188,7 @@ class SubscriptionTest extends TestCase
             'name' => 'foo'
         ]);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('createSubscription'), 2]
             ])
@@ -225,7 +225,7 @@ class SubscriptionTest extends TestCase
         $mock->name()->willReturn(self::TOPIC);
         $topic = $mock->reveal();
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('createSubscription'), 2]
             ])
@@ -233,7 +233,7 @@ class SubscriptionTest extends TestCase
             'foo' => 'bar'
         ]);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('updateSubscription'), 2]
             ])
@@ -270,7 +270,7 @@ class SubscriptionTest extends TestCase
 
     public function testDelete()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('deleteSubscription'), 2],
                 [Argument::withEntry('foo', 'bar'), 4]
@@ -287,7 +287,7 @@ class SubscriptionTest extends TestCase
 
     public function testExists()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSubscription'), 2],
                 [Argument::withEntry('foo', 'bar'), 4]
@@ -304,7 +304,7 @@ class SubscriptionTest extends TestCase
 
     public function testExistsNotFound()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSubscription'), 2]
             ])
@@ -323,7 +323,7 @@ class SubscriptionTest extends TestCase
             'topic' => self::TOPIC
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSubscription'), 2],
                 [Argument::withEntry('foo', 'bar'), 4]
@@ -344,7 +344,7 @@ class SubscriptionTest extends TestCase
             'topic' => self::TOPIC
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSubscription'), 2]
             ])
@@ -364,7 +364,7 @@ class SubscriptionTest extends TestCase
             'topic' => self::TOPIC
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSubscription'), 2],
                 [Argument::withEntry('foo', 'bar'), 4]
@@ -392,7 +392,7 @@ class SubscriptionTest extends TestCase
             ]
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('pull'), 2],
                 [Argument::withEntry('foo', 'bar'), 4]
@@ -427,7 +427,7 @@ class SubscriptionTest extends TestCase
             ]
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('pull'), 2],
                 [Argument::withEntry('foo', 'bar'), 4]
@@ -461,7 +461,7 @@ class SubscriptionTest extends TestCase
             ]
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('pull'), 2],
                 [Argument::containing(2), 3],   // maxMessages
@@ -489,7 +489,7 @@ class SubscriptionTest extends TestCase
     {
         $ackId = 'foobar';
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('acknowledge'), 2],
                 [Argument::withEntry(1, [$ackId]), 3],
@@ -505,7 +505,7 @@ class SubscriptionTest extends TestCase
 
     public function testAcknowledgeBatch()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('acknowledge'), 2],
                 [Argument::withEntry(1, $this->ackIds), 3],
@@ -530,7 +530,7 @@ class SubscriptionTest extends TestCase
         ];
         $ex = $this->generateEodException($metadata);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('acknowledge'), 2],
                 [Argument::withEntry(1, $this->ackIds), 3]
@@ -563,7 +563,7 @@ class SubscriptionTest extends TestCase
         // in it's exception msg, then it should bubble up
         $ex = $this->generateEodException($metadata, 'FAILURE_REASON');
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('acknowledge'), 2],
                 [Argument::withEntry(1, $this->ackIds), 3]
@@ -590,7 +590,7 @@ class SubscriptionTest extends TestCase
 
         $ex = $this->generateEodException($metadata);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('acknowledge'), 2],
                 [Argument::withEntry(1, $this->ackIds), 3]
@@ -616,7 +616,7 @@ class SubscriptionTest extends TestCase
 
         $ex = $this->generateEodException($metadata);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('acknowledge'), 2],
                 [Argument::withEntry(1, $this->ackIds), 3]
@@ -646,7 +646,7 @@ class SubscriptionTest extends TestCase
 
         $allEx = [$ex1, $ex1, $ex2];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('acknowledge'), 2]
             ])
@@ -671,7 +671,7 @@ class SubscriptionTest extends TestCase
         $ex = $this->generateEodException($metadata);
         $allEx = [$ex, $ex];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('acknowledge'), 2]
             ])
@@ -694,7 +694,7 @@ class SubscriptionTest extends TestCase
 
     public function testAcknowledgeBatchNeverRetriesOnSuccess()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('acknowledge'), 2]
             ])
@@ -721,7 +721,7 @@ class SubscriptionTest extends TestCase
         // Any reason other than `EXACTLY_ONCE_ACKID_FAILURE` will work
         $ex = $this->generateEodException($metadata, 'FAILURE_REASON');
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('acknowledge'), 2]
             ])
@@ -747,7 +747,7 @@ class SubscriptionTest extends TestCase
         $message = new Message([], ['ackId' => $ackId]);
         $seconds = 100;
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('modifyAckDeadline'), 2],
                 [
@@ -769,7 +769,7 @@ class SubscriptionTest extends TestCase
     {
         $seconds = 100;
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('modifyAckDeadline'), 2],
                 [
@@ -800,7 +800,7 @@ class SubscriptionTest extends TestCase
         ];
         $ex = $this->generateEodException($metadata);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('modifyAckDeadline'), 2],
                 [
@@ -838,7 +838,7 @@ class SubscriptionTest extends TestCase
         // in it's exception msg, then it should bubble up
         $ex = $this->generateEodException($metadata, 'FAILURE_REASON');
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('modifyAckDeadline'), 2],
                 [
@@ -871,7 +871,7 @@ class SubscriptionTest extends TestCase
 
         $ex = $this->generateEodException($metadata);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('modifyAckDeadline'), 2],
                 [
@@ -907,7 +907,7 @@ class SubscriptionTest extends TestCase
 
         $ex = $this->generateEodException($metadata);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('modifyAckDeadline'), 2],
                 [
@@ -943,7 +943,7 @@ class SubscriptionTest extends TestCase
 
         $allEx = [$ex1, $ex1, $ex2];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('modifyAckDeadline'), 2],
                 [
@@ -978,7 +978,7 @@ class SubscriptionTest extends TestCase
         $ex = $this->generateEodException($metadata);
         $allEx = [$ex, $ex];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('modifyAckDeadline'), 2],
                 [
@@ -1011,7 +1011,7 @@ class SubscriptionTest extends TestCase
     public function testModifyAckDeadlineBatchNeverRetriesOnSuccess()
     {
         $seconds = 10;
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('modifyAckDeadline'), 2],
                 [
@@ -1049,7 +1049,7 @@ class SubscriptionTest extends TestCase
         // Any reason other than `EXACTLY_ONCE_ACKID_FAILURE` will work
         $ex = $this->generateEodException($metadata, 'FAILURE_REASON');
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('modifyAckDeadline'), 2],
                 [
@@ -1085,7 +1085,7 @@ class SubscriptionTest extends TestCase
             'push_endpoint' => 'test'
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('modifyPushConfig'), 2],
                 [Argument::that(function ($args) {
@@ -1105,7 +1105,7 @@ class SubscriptionTest extends TestCase
         $dt = new \DateTime;
         $timestamp = new Timestamp($dt);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('seek'), 2],
                 [Argument::that(function ($args) {
@@ -1128,7 +1128,7 @@ class SubscriptionTest extends TestCase
 
         $snapshot = $stub->reveal();
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('seek'), 2],
                 [Argument::that(function ($args) {
@@ -1151,7 +1151,7 @@ class SubscriptionTest extends TestCase
 
     public function testDetach()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('detachSubscription'), 2],
                 [Argument::withEntry(0, self::SUBSCRIPTION), 3]
@@ -1173,7 +1173,7 @@ class SubscriptionTest extends TestCase
             'bucket' => 'pubsub-test-bucket',
             'maxDuration' => '3.1s'
         ];
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('createSubscription'), 2],
                 [Argument::allOf(
@@ -1186,7 +1186,7 @@ class SubscriptionTest extends TestCase
             'topic' => self::TOPIC
         ])->shouldBeCalledTimes(1);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSubscription'), 2]
             ])
@@ -1210,7 +1210,7 @@ class SubscriptionTest extends TestCase
             'maxDuration' => new Duration(3, 1e+9)
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('updateSubscription'), 2],
                 [Argument::that(function ($args) {
@@ -1225,7 +1225,7 @@ class SubscriptionTest extends TestCase
             'topic' => self::TOPIC
         ])->shouldBeCalledTimes(1);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSubscription'), 2]
             ])

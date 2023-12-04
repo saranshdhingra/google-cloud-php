@@ -56,7 +56,7 @@ class SchemaTest extends TestCase
 
     public function testDelete()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('deleteSchema'), 2],
                 [Argument::containing(self::NAME), 3]
@@ -71,7 +71,7 @@ class SchemaTest extends TestCase
 
     public function testInfo()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSchema'), 2],
                 [Argument::containing(self::NAME), 3],
@@ -89,7 +89,7 @@ class SchemaTest extends TestCase
 
     public function testReload()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSchema'), 2],
                 [Argument::containing(self::NAME), 3],
@@ -107,7 +107,7 @@ class SchemaTest extends TestCase
 
     public function testExists()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSchema'), 2],
                 [Argument::containing(self::NAME), 3],
@@ -122,7 +122,7 @@ class SchemaTest extends TestCase
 
     public function testExistsReturnsFalse()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getSchema'), 2],
                 [Argument::containing(self::NAME), 3],

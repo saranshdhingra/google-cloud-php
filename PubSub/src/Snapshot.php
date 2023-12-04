@@ -166,7 +166,7 @@ class Snapshot
 
         $options['project'] = $this->formatName('project', $this->projectId);
 
-        $this->info = $this->requestHandler->sendReq(
+        $this->info = $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'createSnapshot',
             [$this->name, $this->info['subscription']],
@@ -192,7 +192,7 @@ class Snapshot
      */
     public function delete(array $options = [])
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'deleteSnapshot',
             [$this->name],

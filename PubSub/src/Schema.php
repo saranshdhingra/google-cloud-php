@@ -100,7 +100,7 @@ class Schema
      */
     public function delete(array $options = [])
     {
-        return $this->requestHandler->sendReq(
+        return $this->requestHandler->sendRequest(
             SchemaServiceClient::class,
             'deleteSchema',
             [$this->name],
@@ -178,7 +178,7 @@ class Schema
             $options['view'] = SchemaView::value($options['view']);
         }
 
-        return $this->info = $this->requestHandler->sendReq(
+        return $this->info = $this->requestHandler->sendRequest(
             SchemaServiceClient::class,
             'getSchema',
             [$this->name],

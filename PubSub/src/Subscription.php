@@ -436,7 +436,7 @@ class Subscription
             );
         }
 
-        $this->info = $this->requestHandler->sendReq(
+        $this->info = $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'createSubscription',
             [$this->name,$this->topicName],
@@ -658,7 +658,7 @@ class Subscription
             ] + $subscription
         );
 
-        return $this->info = $this->requestHandler->sendReq(
+        return $this->info = $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'updateSubscription',
             [$subscriptionProto, $fieldMask],
@@ -681,7 +681,7 @@ class Subscription
      */
     public function delete(array $options = [])
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'deleteSubscription',
             [$this->name],
@@ -766,7 +766,7 @@ class Subscription
      */
     public function reload(array $options = [])
     {
-        return $this->info = $this->requestHandler->sendReq(
+        return $this->info = $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'getSubscription',
             [$this->name],
@@ -804,7 +804,7 @@ class Subscription
         $messages = [];
         $maxMessages = $this->pluck('maxMessages', $options, false) ?? self::MAX_MESSAGES;
 
-        $response = $this->requestHandler->sendReq(
+        $response = $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'pull',
             [$this->name, $maxMessages],
@@ -1204,7 +1204,7 @@ class Subscription
             $pushConfig
         );
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'modifyPushConfig',
             [$this->name, $pushConfig],
@@ -1238,7 +1238,7 @@ class Subscription
             $timestamp->formatForApi()
         );
 
-        return $this->requestHandler->sendReq(
+        return $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'seek',
             [$this->name],
@@ -1269,7 +1269,7 @@ class Subscription
     {
         $options['snapshot'] = $snapshot->name();
 
-        return $this->requestHandler->sendReq(
+        return $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'seek',
             [$this->name],
@@ -1295,7 +1295,7 @@ class Subscription
      */
     public function detach(array $options = [])
     {
-        return $this->requestHandler->sendReq(
+        return $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'detachSubscription',
             [$this->name],
@@ -1534,7 +1534,7 @@ class Subscription
     {
         $ackIds = $this->getMessageAckIds($messages);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'acknowledge',
             [$this->name,$ackIds],
@@ -1553,7 +1553,7 @@ class Subscription
     {
         $ackIds = $this->getMessageAckIds($messages);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             SubscriberClient::class,
             'modifyAckDeadline',
             [$this->name, $ackIds, $seconds],

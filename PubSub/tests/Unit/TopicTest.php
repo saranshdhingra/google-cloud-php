@@ -67,7 +67,7 @@ class TopicTest extends TestCase
 
     public function testCreate()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('createTopic'), 2]
             ])
@@ -75,7 +75,7 @@ class TopicTest extends TestCase
             'name' => self::TOPIC
         ]);
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getTopic'), 2]
             ])
@@ -93,7 +93,7 @@ class TopicTest extends TestCase
 
     public function testUpdate()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('updateTopic'), 2],
                 [Argument::that(function ($args) {
@@ -114,7 +114,7 @@ class TopicTest extends TestCase
 
     public function testDelete()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('deleteTopic'), 2]
             ])
@@ -127,7 +127,7 @@ class TopicTest extends TestCase
 
     public function testExists()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getTopic'), 2]
             ])
@@ -142,7 +142,7 @@ class TopicTest extends TestCase
 
     public function testExistsReturnsFalse()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getTopic'), 2]
             ])
@@ -155,7 +155,7 @@ class TopicTest extends TestCase
 
     public function testInfo()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getTopic'), 2]
             ])
@@ -174,7 +174,7 @@ class TopicTest extends TestCase
 
     public function testReload()
     {
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('getTopic'), 2]
             ])
@@ -202,7 +202,7 @@ class TopicTest extends TestCase
             'message1id'
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('publish'), 2],
                 [Argument::that(function ($args) use ($message) {
@@ -244,7 +244,7 @@ class TopicTest extends TestCase
             'message2id'
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('publish'), 2],
                 [
@@ -279,7 +279,7 @@ class TopicTest extends TestCase
             'key' => 'val'
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('publish'), 2]
             ])
@@ -305,7 +305,7 @@ class TopicTest extends TestCase
             'topic' => self::TOPIC
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('createSubscription'), 2],
                 [Argument::withEntry('foo', 'bar'), 4]
@@ -335,7 +335,7 @@ class TopicTest extends TestCase
             'projects/project-name/subscriptions/subscription-c',
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('listTopicSubscriptions'), 2]
             ])
@@ -366,7 +366,7 @@ class TopicTest extends TestCase
             'projects/project-name/subscriptions/subscription-c',
         ];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('listTopicSubscriptions'), 2],
                 [Argument::that(function ($options) {
@@ -437,7 +437,7 @@ class TopicTest extends TestCase
         );
         $messages = [['data' => 'hello world']];
 
-        $this->requestHandler->sendReq(
+        $this->requestHandler->sendRequest(
             ...$this->matchesNthArgument([
                 [Argument::exact('publish'), 2],
                 [Argument::withEntry('compressionOptions', [
