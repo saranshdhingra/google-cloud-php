@@ -18,7 +18,9 @@
 namespace Google\Cloud\PubSub;
 
 use Google\Cloud\Core\Exception\NotFoundException;
-use Google\Cloud\PubSub\Connection\ConnectionInterface;
+use Google\Cloud\PubSub\V1\SchemaServiceClient;
+use Google\Cloud\PubSub\V1\SchemaView;
+use Google\Cloud\Core\RequestHandler;
 
 /**
  * Represents a Pub/Sub Schema resource.
@@ -39,10 +41,10 @@ use Google\Cloud\PubSub\Connection\ConnectionInterface;
 class Schema
 {
     /**
-     * @var ConnectionInterface
-     * @internal
+     * The request handler that is responsible for sending a req and
+     * serializing responses into relevant classes.
      */
-    private $connection;
+    private $requestHandler;
 
     /**
      * @var string
@@ -55,18 +57,17 @@ class Schema
     private $info;
 
     /**
-     * @param ConnectionInterface $connection A connection to Cloud Pub/Sub
-     *        This object is created by PubSubClient,
-     *        and should not be instantiated outside of this client.
+     * @param RequestHandler The request handler that is responsible for sending a request and
+     * serializing responses into relevant classes.
      * @param string $name The schema name.
      * @param array $info [optional] Schema data.
      */
     public function __construct(
-        ConnectionInterface $connection,
+        RequestHandler $requestHandler,
         $name,
         array $info = []
     ) {
-        $this->connection = $connection;
+        $this->requestHandler = $requestHandler;
         $this->name = $name;
         $this->info = $info;
     }
@@ -99,9 +100,12 @@ class Schema
      */
     public function delete(array $options = [])
     {
-        return $this->connection->deleteSchema([
-            'name' => $this->name
-        ] + $options);
+        return $this->requestHandler->sendRequest(
+            SchemaServiceClient::class,
+            'deleteSchema',
+            [$this->name],
+            $options
+        );
     }
 
     /**
@@ -170,9 +174,16 @@ class Schema
             'view' => 'FULL',
         ];
 
-        return $this->info = $this->connection->getSchema([
-            'name' => $this->name,
-        ] + $options);
+        if (is_string($options['view'])) {
+            $options['view'] = SchemaView::value($options['view']);
+        }
+
+        return $this->info = $this->requestHandler->sendRequest(
+            SchemaServiceClient::class,
+            'getSchema',
+            [$this->name],
+            $options
+        );
     }
 
     /**

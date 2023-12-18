@@ -18,10 +18,10 @@
 namespace Google\Cloud\PubSub\Tests\Unit;
 
 use Google\Cloud\Core\Testing\TestHelpers;
-use Google\Cloud\PubSub\Connection\ConnectionInterface;
 use Google\Cloud\PubSub\Snapshot;
 use Google\Cloud\PubSub\Subscription;
 use Google\Cloud\PubSub\Topic;
+use Google\Cloud\Core\RequestHandler;
 use PHPUnit\Framework\TestCase;
 use Prophecy\Argument;
 use Prophecy\PhpUnit\ProphecyTrait;
@@ -32,28 +32,29 @@ use Prophecy\PhpUnit\ProphecyTrait;
 class SnapshotTest extends TestCase
 {
     use ProphecyTrait;
+    use ArgumentHelperTrait;
 
     const PROJECT = 'my-project';
     const SNAPSHOT_ID = 'snapshot';
 
-    private $connection;
+    private $requestHandler;
     private $snapshot;
 
     public function setUp(): void
     {
-        $this->connection = $this->prophesize(ConnectionInterface::class);
+        $this->requestHandler = $this->prophesize(RequestHandler::class);
         $this->snapshot = TestHelpers::stub(Snapshot::class, [
-            $this->connection->reveal(),
+            $this->requestHandler->reveal(),
             self::PROJECT,
             self::SNAPSHOT_ID,
             false
-        ], ['connection', 'info']);
+        ], ['requestHandler', 'info']);
     }
 
     public function testConstructWithFullyQualifiedName()
     {
         $snapshot = TestHelpers::stub(Snapshot::class, [
-            $this->connection->reveal(),
+            $this->requestHandler->reveal(),
             self::PROJECT,
             'projects/'. self::PROJECT .'/snapshots/'. self::SNAPSHOT_ID,
             false
@@ -83,8 +84,12 @@ class SnapshotTest extends TestCase
 
     public function testCreate()
     {
-        $this->connection->createSnapshot(Argument::any())
-            ->shouldBeCalled();
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('createSnapshot'), 2],
+                [Argument::exact(true), 5]
+            ], 5)
+        )->shouldBeCalled();
 
         $info = [
             'subscription' => 'foo',
@@ -92,7 +97,7 @@ class SnapshotTest extends TestCase
 
         $this->snapshot->___setProperty('info', $info);
 
-        $this->snapshot->___setProperty('connection', $this->connection->reveal());
+        $this->snapshot->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $this->snapshot->create();
     }
@@ -106,11 +111,15 @@ class SnapshotTest extends TestCase
 
     public function testDelete()
     {
-        $this->connection->deleteSnapshot([
-            'snapshot' => 'projects/'. self::PROJECT .'/snapshots/'. self::SNAPSHOT_ID
-        ])->shouldBeCalled();
+        $snapshotName = 'projects/'. self::PROJECT .'/snapshots/'. self::SNAPSHOT_ID;
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('deleteSnapshot'), 2],
+                [Argument::withEntry(0, $snapshotName), 3]
+            ])
+        )->shouldBeCalled();
 
-        $this->snapshot->___setProperty('connection', $this->connection->reveal());
+        $this->snapshot->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $this->snapshot->delete();
     }

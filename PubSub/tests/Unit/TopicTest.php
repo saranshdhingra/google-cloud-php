@@ -18,13 +18,17 @@
 namespace Google\Cloud\PubSub\Tests\Unit;
 
 use Google\Cloud\Core\Exception\NotFoundException;
-use Google\Cloud\Core\Iam\Iam;
 use Google\Cloud\Core\Iterator\ItemIterator;
 use Google\Cloud\Core\Testing\TestHelpers;
+use Google\Cloud\Core\V2\Iam;
 use Google\Cloud\PubSub\BatchPublisher;
-use Google\Cloud\PubSub\Connection\ConnectionInterface;
 use Google\Cloud\PubSub\Subscription;
 use Google\Cloud\PubSub\Topic;
+use Google\Cloud\PubSub\V1\PubsubMessage;
+use Google\Cloud\PubSub\V1\Topic as V1Topic;
+use Google\Cloud\Core\RequestHandler;
+use Google\Cloud\PubSub\PubSubClient;
+use Google\Protobuf\FieldMask;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Prophecy\Argument;
@@ -36,25 +40,24 @@ use Prophecy\PhpUnit\ProphecyTrait;
 class TopicTest extends TestCase
 {
     use ProphecyTrait;
+    use ArgumentHelperTrait;
 
     const TOPIC = 'projects/project-name/topics/topic-name';
 
     private $topic;
-    private $connection;
+    private $requestHandler;
 
     public function setUp(): void
     {
-        $this->connection = $this->prophesize(ConnectionInterface::class);
-        $this->topic = TestHelpers::stub(
-            Topic::class,
-            [
-                $this->connection->reveal(),
-                'project-name',
-                'topic-name',
-                true
-            ],
-            ['connection', 'enableCompression', 'compressionBytesThreshold']
-        );
+        $this->requestHandler = $this->prophesize(RequestHandler::class);
+        $this->topic = TestHelpers::stub(Topic::class, [
+            $this->requestHandler->reveal(),
+            'project-name',
+            'topic-name',
+            true
+        ], ['requestHandler', 'enableCompression', 'compressionBytesThreshold']);
+        $client = new PubSubClient();
+        $this->requestHandler->getSerializer()->willReturn($client->getSerializer());
     }
 
     public function testName()
@@ -64,14 +67,21 @@ class TopicTest extends TestCase
 
     public function testCreate()
     {
-        $this->connection->createTopic(Argument::withEntry('foo', 'bar'))
-            ->willReturn([
-                'name' => self::TOPIC
-            ]);
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('createTopic'), 2]
+            ])
+        )->willReturn([
+            'name' => self::TOPIC
+        ]);
 
-        $this->connection->getTopic()->shouldNotBeCalled();
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('getTopic'), 2]
+            ])
+        )->shouldNotBeCalled();
 
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $res = $this->topic->create(['foo' => 'bar']);
 
@@ -83,19 +93,20 @@ class TopicTest extends TestCase
 
     public function testUpdate()
     {
-        $this->connection->updateTopic(Argument::allOf(
-            Argument::withEntry('topic', [
-                'name' => $this->topic->name(),
-                'foo' => 'bar'
-            ]),
-            Argument::withEntry('updateMask', 'foo')
-        ))->shouldBeCalled()->willReturn([
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('updateTopic'), 2],
+                [Argument::that(function ($args) {
+                    return $args[0] instanceof V1Topic && $args[1] instanceof FieldMask;
+                }), 3]
+            ])
+        )->shouldBeCalled()->willReturn([
             'foo' => 'bar'
         ]);
 
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
-        $res = $this->topic->update(['foo' => 'bar']);
+        $res = $this->topic->update(['labels' => ['bar']]);
 
         $this->assertEquals(['foo' => 'bar'], $res);
         $this->assertEquals('bar', $this->topic->info()['foo']);
@@ -103,44 +114,56 @@ class TopicTest extends TestCase
 
     public function testDelete()
     {
-        $this->connection->deleteTopic(Argument::withEntry('foo', 'bar'))
-            ->shouldBeCalled();
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('deleteTopic'), 2]
+            ])
+        )->shouldBeCalled();
 
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $res = $this->topic->delete(['foo' => 'bar']);
     }
 
     public function testExists()
     {
-        $this->connection->getTopic(Argument::withEntry('foo', 'bar'))
-            ->willReturn([
-                'name' => self::TOPIC
-            ]);
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('getTopic'), 2]
+            ])
+        )->willReturn([
+            'name' => self::TOPIC
+        ]);
 
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $this->assertTrue($this->topic->exists(['foo' => 'bar']));
     }
 
     public function testExistsReturnsFalse()
     {
-        $this->connection->getTopic(Argument::withEntry('foo', 'bar'))
-            ->willThrow(new NotFoundException('uh oh'));
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('getTopic'), 2]
+            ])
+        )->willThrow(new NotFoundException('uh oh'));
 
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $this->assertFalse($this->topic->exists(['foo' => 'bar']));
     }
 
     public function testInfo()
     {
-        $this->connection->getTopic(Argument::withEntry('foo', 'bar'))
-            ->willReturn([
-                'name' => self::TOPIC
-            ])->shouldBeCalledTimes(1);
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('getTopic'), 2]
+            ])
+        )->willReturn([
+            'name' => self::TOPIC
+        ])->shouldBeCalledTimes(1);
 
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $res = $this->topic->info(['foo' => 'bar']);
         $res2 = $this->topic->info();
@@ -151,12 +174,15 @@ class TopicTest extends TestCase
 
     public function testReload()
     {
-        $this->connection->getTopic(Argument::withEntry('foo', 'bar'))
-            ->willReturn([
-                'name' => self::TOPIC
-            ]);
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('getTopic'), 2]
+            ])
+        )->willReturn([
+            'name' => self::TOPIC
+        ]);
 
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $res = $this->topic->reload(['foo' => 'bar']);
 
@@ -176,16 +202,21 @@ class TopicTest extends TestCase
             'message1id'
         ];
 
-        $this->connection->publishMessage(Argument::allOf(
-            Argument::withEntry('foo', 'bar'),
-            Argument::that(function ($options) use ($message) {
-                $message['data'] = base64_encode($message['data']);
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('publish'), 2],
+                [Argument::that(function ($args) use ($message) {
+                    $message['data'] = base64_encode($message['data']);
 
-                return $options['messages'] === [$message];
-            })
-        ))->willReturn($ids);
+                    return $args[0] === self::TOPIC &&
+                        $args[1][0] instanceof PubsubMessage &&
+                        $args[1][0]->getData() === $message['data'];
+                }), 3],
+                [Argument::withEntry('foo', 'bar'), 4]
+            ])
+        )->willReturn($ids);
 
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $res = $this->topic->publish($message, ['foo' => 'bar']);
 
@@ -213,17 +244,27 @@ class TopicTest extends TestCase
             'message2id'
         ];
 
-        $this->connection->publishMessage(Argument::allOf(
-            Argument::withEntry('foo', 'bar'),
-            Argument::that(function ($options) use ($messages) {
-                $messages[0]['data'] = base64_encode($messages[0]['data']);
-                $messages[1]['data'] = base64_encode($messages[1]['data']);
-
-                return $options['messages'] === $messages;
-            })
-        ))->willReturn($ids);
-
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('publish'), 2],
+                [
+                    Argument::that(function ($args) use ($messages) {
+                        $validArg = $args[0] === self::TOPIC;
+        
+                        foreach ($messages as $key => $msg) {
+                            $validArg = $validArg && (base64_encode($msg['data']) == $args[1][$key]->getData());
+                            $validArg = $validArg && $args[1][$key] instanceof PubsubMessage;
+                        }
+                        $messages[0]['data'] = base64_encode($messages[0]['data']);
+                        $messages[1]['data'] = base64_encode($messages[1]['data']);
+        
+                        return  $validArg;
+                    }), 3
+                ],
+                [Argument::withEntry('foo', 'bar'), 4]
+            ])
+        )->willReturn($ids);
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $res = $this->topic->publishBatch($messages, ['foo' => 'bar']);
 
@@ -238,9 +279,13 @@ class TopicTest extends TestCase
             'key' => 'val'
         ];
 
-        $this->connection->publishMessage(Argument::any());
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('publish'), 2]
+            ])
+        );
 
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $this->topic->publishBatch([$message]);
     }
@@ -260,11 +305,15 @@ class TopicTest extends TestCase
             'topic' => self::TOPIC
         ];
 
-        $this->connection->createSubscription(Argument::withEntry('foo', 'bar'))
-            ->willReturn($subscriptionData)
-            ->shouldBeCalledTimes(1);
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('createSubscription'), 2],
+                [Argument::withEntry('foo', 'bar'), 4]
+            ])
+        )->willReturn($subscriptionData)
+        ->shouldBeCalledTimes(1);
 
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $subscription = $this->topic->subscribe('subscription-name', ['foo' => 'bar']);
 
@@ -286,12 +335,15 @@ class TopicTest extends TestCase
             'projects/project-name/subscriptions/subscription-c',
         ];
 
-        $this->connection->listSubscriptionsByTopic(Argument::withEntry('foo', 'bar'))
-            ->willReturn([
-                'subscriptions' => $subscriptionResult
-            ])->shouldBeCalledTimes(1);
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('listTopicSubscriptions'), 2]
+            ])
+        )->willReturn([
+            'subscriptions' => $subscriptionResult
+        ])->shouldBeCalledTimes(1);
 
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $subscriptions = $this->topic->subscriptions([
             'foo' => 'bar'
@@ -314,21 +366,23 @@ class TopicTest extends TestCase
             'projects/project-name/subscriptions/subscription-c',
         ];
 
-        $this->connection->listSubscriptionsByTopic(Argument::allOf(
-            Argument::withEntry('foo', 'bar'),
-            Argument::that(function ($options) {
-                if (isset($options['pageToken']) && $options['pageToken'] !== 'foo') {
-                    return false;
-                }
-
-                return true;
-            })
-        ))->willReturn([
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('listTopicSubscriptions'), 2],
+                [Argument::that(function ($options) {
+                    if (isset($options['pageToken']) && $options['pageToken'] !== 'foo') {
+                        return false;
+                    }
+    
+                    return true;
+                }), 4]
+            ])
+        )->willReturn([
             'subscriptions' => $subscriptionResult,
             'nextPageToken' => 'foo'
         ])->shouldBeCalledTimes(2);
 
-        $this->topic->___setProperty('connection', $this->connection->reveal());
+        $this->topic->___setProperty('requestHandler', $this->requestHandler->reveal());
 
         $subscriptions = $this->topic->subscriptions([
             'foo' => 'bar'
@@ -373,38 +427,27 @@ class TopicTest extends TestCase
         $topic = TestHelpers::stub(
             Topic::class,
             [
-                $this->connection->reveal(),
+                $this->requestHandler->reveal(),
                 'project-name',
                 'topic-name',
                 true,
                 $info
             ],
-            ['connection']
+            ['requestHandler']
         );
         $messages = [['data' => 'hello world']];
 
-        $this->connection->publishMessage(Argument::that(
-            function ($args) use (
-                $processedEnableCompression,
-                $processedCompressionBytesThreshold
-            ) {
-                $result = is_array($args) &&
-                    array_key_exists('messages', $args) &&
-                    array_key_exists('topic', $args) &&
-                    array_key_exists('compressionOptions', $args);
+        $this->requestHandler->sendRequest(
+            ...$this->matchesNthArgument([
+                [Argument::exact('publish'), 2],
+                [Argument::withEntry('compressionOptions', [
+                    'enableCompression' => $processedEnableCompression,
+                    'compressionBytesThreshold' => $processedCompressionBytesThreshold
+                ]), 4]
+            ])
+        )->shouldBeCalled(1)->willReturn([]);
 
-                if ($result &&
-                    ($args['compressionOptions']['enableCompression'] === $processedEnableCompression) &&
-                    ($args['compressionOptions']['compressionBytesThreshold'] === $processedCompressionBytesThreshold)
-                ) {
-                    return true;
-                }
-
-                return false;
-            }
-        ))->shouldBeCalled(1)->willReturn([]);
-
-        $topic->___setProperty('connection', $this->connection->reveal());
+        $topic->___setProperty('requestHandler', $this->requestHandler->reveal());
         $topic->publishBatch($messages);
     }
 
